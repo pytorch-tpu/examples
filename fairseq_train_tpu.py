@@ -58,9 +58,9 @@ import math
 import collections
 from datetime import datetime
 
-pytorch_folder = os.path.dirname(os.path.abspath(sys.argv[0]))
-xla_folder = os.path.join(pytorch_folder, 'deps', 'xla')
-fairseq_folder = os.path.join(pytorch_folder, 'deps', 'fairseq')
+root_folder = os.path.dirname(os.path.abspath(sys.argv[0]))
+xla_folder = os.path.join(root_folder, 'deps', 'xla')
+fairseq_folder = os.path.join(root_folder, 'deps', 'fairseq')
 sys.path.insert(0, xla_folder)
 sys.path.insert(0, fairseq_folder)
 
