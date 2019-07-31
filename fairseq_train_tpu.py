@@ -168,7 +168,7 @@ def parse_args():
   return FLAGS
 
 
-def prepare_task(args):
+def prepare_task(args, devices):
   # Setup task, e.g., translation, language modeling, etc.
   task = tasks.setup_task(args)
 
@@ -217,10 +217,6 @@ def main_tpu(args):
     msg = '{}/ {}, device {}, step {}'.format(step_type, now(), device, step)
     if tracker:
       msg += ', Rate={:.2f}'.format(tracker.rate())
-    if metrics_debug:
-      msg += ', Compiles={}, _local_scalar_dense={}'.format(
-          count_compiles(),
-          torch_xla._XLAC._xla_counter_value('aten::_local_scalar_dense'))
     return msg
 
   def train_loop_fn(model, loader, device, context):
@@ -332,9 +328,9 @@ def main_tpu(args):
     print('\t{} {}'.format(key, val))
   print('---------')
 
-  devices = xm.get_xla_supported_devices(max_devices=FLAGS.num_cores)
+  devices = xm.get_xla_supported_devices(max_devices=args.num_cores)
   task, trainers, model_parallel, epoch_itr, lr, valid_subsets = prepare_task(
-      args)
+      args, devices)
 
   train_meter = StopwatchMeter()
   train_meter.start()
