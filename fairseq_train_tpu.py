@@ -57,12 +57,9 @@ import os
 import math
 import collections
 from datetime import datetime
+from utils import initialize_path
 
-root_folder = os.path.dirname(os.path.abspath(sys.argv[0]))
-xla_folder = os.path.join(root_folder, 'deps', 'xla')
-fairseq_folder = os.path.join(root_folder, 'deps', 'fairseq')
-sys.path.insert(0, xla_folder)
-sys.path.insert(0, fairseq_folder)
+initialize_path('xla', 'fairseq')
 
 import torch
 
@@ -90,7 +87,7 @@ def collate_tokens_tpu(values,
   global PAD_TO_LENGTH
   size = max(v.size(0) for v in values)
   if size > PAD_TO_LENGTH:
-    print(
+    xu.eprint(
         'I had to change PAD_TO_LENGTH from {} to {}, this is going to trigger graph recompiles'
         .format(PAD_TO_LENGTH, size))
     PAD_TO_LENGTH = size
@@ -135,38 +132,38 @@ def parse_args():
   if not FLAGS.use_gpu:
     if FLAGS.update_freq != [1]:
       FLAGS.update_freq = [1]
-      print(('overriding update_freq. It is now globally 1.'
+      xu.eprint(('overriding update_freq. It is now globally 1.'
              ' Gradient update delaying is achieved through'
              ' `num_cores` in TPU setting.'))
     if FLAGS.fp16:
-      print('suppressing "fp16" as this is controlled by env var XLA_USE_BF16')
+      xu.eprint('suppressing "fp16" as this is controlled by env var XLA_USE_BF16')
       FLAGS.fp16 = False
     if FLAGS.clip_norm == 0.0:
-      print(
+      xu.eprint(
           'clip_norm needs to be nonzero for good TPU performance, setting it to 25'
       )
       FLAGS.clip_norm = 25.0
     if FLAGS.distributed_world_size > 1:
-      print('suppressing "distributed_world_size"')
+      xu.eprint('suppressing "distributed_world_size"')
       FLAGS.distributed_world_size = 1
     if FLAGS.distributed_init_method is not None:
-      print('suppressing "distributed_init_method"')
+      xu.eprint('suppressing "distributed_init_method"')
       FLAGS.distributed_init_method = None
     if FLAGS.max_sentences != FLAGS.required_batch_size_multiple:
       batch_size = max(
           filter(lambda r: r is not None,
                  [FLAGS.max_sentences, FLAGS.required_batch_size_multiple]))
-      print('"max_sentences" and "required_batch_size_multiple" must be equal'
+      xu.eprint('"max_sentences" and "required_batch_size_multiple" must be equal'
             ' to have good performance on TPUs. Using {}'.format(batch_size))
       FLAGS.max_sentences = batch_size
       FLAGS.required_batch_size_multiple = batch_size
     if FLAGS.max_sentences_valid is not None and FLAGS.max_sentences_valid != FLAGS.max_sentences:
       FLAGS.max_sentences_valid = FLAGS.max_sentences
-      print('"max_sentences_valid" and "max_sentences" must be equal'
+      xu.eprint('"max_sentences_valid" and "max_sentences" must be equal'
             ' to have good performance on TPUs. Using {}'.format(
                 FLAGS.max_sentences))
     if FLAGS.max_tokens is not None:
-      print('"max_tokens" needs to be None for better TPU performance')
+      xu.eprint('"max_tokens" needs to be None for better TPU performance')
       FLAGS.max_tokens = None
   return FLAGS
 
@@ -181,7 +178,7 @@ def prepare_task(args):
 
   # Build models and criteria to print some metadata
   model_parallel = dp.DataParallel(
-      lambda: task.build_model(args), device_ids=DEVICES)
+      lambda: task.build_model(args), device_ids=devices)
   model, criterion = task.build_model(args), task.build_criterion(args)
   print(model)
   print('| model {}, criterion {}'.format(args.arch,
@@ -197,7 +194,7 @@ def prepare_task(args):
       device: Trainer(args, task, model, task.build_criterion(args))
       for device, model in zip(model_parallel.devices, model_parallel.models)
   }
-  trainer = trainers[DEVICES[0]]
+  trainer = trainers[devices[0]]
   lr = trainer.get_lr()
 
   # TODO(taylanbil): for now, this next line is only creating the iterator.
@@ -241,7 +238,7 @@ def main_tpu(args):
                 metrics_debug=args.metrics_debug))
       _log_output = trainer.train_step(samples)
       xm.optimizer_step(trainer.optimizer)
-      tracker.add(len(samples) * BATCH_SIZE)
+      tracker.add(len(samples) * args.max_sentences)  # n_batches * batch_size
     stats = fairseq_train.get_training_stats(trainer)
     return tracker, stats
 
@@ -297,10 +294,7 @@ def main_tpu(args):
     valid_losses = [stats['loss'].avg for stats in stats_per_device]
     print('validation stats on subset "{}" - {}'.format(subset, now()))
     for stats in stats_per_device:
-      print(now())
       progress.print(stats, tag=subset, step=trainer.get_num_updates())
-      print(now())
-      pass
     return valid_losses
 
   def validate(args, trainers, task, epoch_itr, subsets):
@@ -338,6 +332,7 @@ def main_tpu(args):
     print('\t{} {}'.format(key, val))
   print('---------')
 
+  devices = xm.get_xla_supported_devices(max_devices=FLAGS.num_cores)
   task, trainers, model_parallel, epoch_itr, lr, valid_subsets = prepare_task(
       args)
 
@@ -369,7 +364,7 @@ def main_tpu(args):
       # to update the learning rate
       vloss = valid_losses[valid_subsets[0]][0]
       print('old learning rate: {}'.format(lr))
-      lr = trainers[DEVICES[0]].lr_step(epoch_itr.epoch, vloss)
+      lr = trainers[devices[0]].lr_step(epoch_itr.epoch, vloss)
       print('new learning rate: {}'.format(lr))
 
       # save checkpoint
@@ -383,13 +378,6 @@ def main_tpu(args):
   print('| done training in {:.1f} seconds'.format(train_meter.sum))
 
 
-def count_compiles():
-  metricsreport = torch_xla._XLAC._xla_metrics_report().split('\n')
-  for i, line in enumerate(metricsreport):
-    if line.endswith('CompileTime'):
-      return int(''.join([c for c in metricsreport[i + 1] if c.isdigit()]))
-
-
 if __name__ == '__main__':
   # override certain args so that we use XLA parallelism instead of torch.
   FLAGS = parse_args()
@@ -397,7 +385,5 @@ if __name__ == '__main__':
     data_utils.collate_tokens = collate_tokens_gpu
     fairseq_train.cli_main()
   else:
-    BATCH_SIZE = FLAGS.max_sentences
-    DEVICES = xm.get_xla_supported_devices(max_devices=FLAGS.num_cores)
     PAD_TO_LENGTH = FLAGS.pad_to_length
     main_tpu(FLAGS)
