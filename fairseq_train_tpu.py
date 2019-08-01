@@ -1,5 +1,4 @@
-"""
-Python script to run FAIRSEQ models on TPU
+"""Python script to run FAIRSEQ models on TPU
 
 This file mimics pytorch/fairseq/train.py, but contains some changes that work
   well with TPUs. Example bash script:
@@ -133,10 +132,11 @@ def parse_args():
     if FLAGS.update_freq != [1]:
       FLAGS.update_freq = [1]
       xu.eprint(('overriding update_freq. It is now globally 1.'
-             ' Gradient update delaying is achieved through'
-             ' `num_cores` in TPU setting.'))
+                 ' Gradient update delaying is achieved through'
+                 ' `num_cores` in TPU setting.'))
     if FLAGS.fp16:
-      xu.eprint('suppressing "fp16" as this is controlled by env var XLA_USE_BF16')
+      xu.eprint(
+          'suppressing "fp16" as this is controlled by env var XLA_USE_BF16')
       FLAGS.fp16 = False
     if FLAGS.clip_norm == 0.0:
       xu.eprint(
@@ -153,15 +153,16 @@ def parse_args():
       batch_size = max(
           filter(lambda r: r is not None,
                  [FLAGS.max_sentences, FLAGS.required_batch_size_multiple]))
-      xu.eprint('"max_sentences" and "required_batch_size_multiple" must be equal'
-            ' to have good performance on TPUs. Using {}'.format(batch_size))
+      xu.eprint(
+          '"max_sentences" and "required_batch_size_multiple" must be equal'
+          ' to have good performance on TPUs. Using {}'.format(batch_size))
       FLAGS.max_sentences = batch_size
       FLAGS.required_batch_size_multiple = batch_size
     if FLAGS.max_sentences_valid is not None and FLAGS.max_sentences_valid != FLAGS.max_sentences:
       FLAGS.max_sentences_valid = FLAGS.max_sentences
       xu.eprint('"max_sentences_valid" and "max_sentences" must be equal'
-            ' to have good performance on TPUs. Using {}'.format(
-                FLAGS.max_sentences))
+                ' to have good performance on TPUs. Using {}'.format(
+                    FLAGS.max_sentences))
     if FLAGS.max_tokens is not None:
       xu.eprint('"max_tokens" needs to be None for better TPU performance')
       FLAGS.max_tokens = None
