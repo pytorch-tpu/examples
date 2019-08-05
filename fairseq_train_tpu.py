@@ -192,7 +192,7 @@ def prepare_task(args, devices):
 
   # Build trainers
   trainers = {
-      device: Trainer(args, task, model, task.build_criterion(args))
+      device: Trainer(args, task, model, task.build_criterion(args), xla=True)
       for device, model in zip(model_parallel.devices, model_parallel.models)
   }
   trainer = trainers[devices[0]]
