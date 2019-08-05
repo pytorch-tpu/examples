@@ -324,10 +324,10 @@ def main_tpu(args):
     return ((lr > FLAGS.min_lr) and (epoch_itr.epoch < max_epoch) and
             (n_updates < max_update))
 
-  print('Args')
+  xu.eprint('Args')
   for key, val in args.__dict__.items():
-    print('\t{} {}'.format(key, val))
-  print('---------')
+    xu.eprint('\t{} {}'.format(key, val))
+  xu.eprint('---------')
 
   devices = xm.get_xla_supported_devices(max_devices=args.num_cores)
   task, trainers, model_parallel, epoch_itr, lr, valid_subsets = prepare_task(
