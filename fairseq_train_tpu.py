@@ -58,7 +58,7 @@ import collections
 from datetime import datetime
 from utils import initialize_path
 
-initialize_path('xla', 'fairseq')
+initialize_path('fairseq')
 
 import torch
 
