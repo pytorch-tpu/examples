@@ -1,7 +1,3 @@
-[submodule "deps/xla"]
-	path = deps/xla
-	url = git@github.com:pytorch/xla.git
-    ignore = dirty
 [submodule "deps/fairseq"]
 	path = deps/fairseq
 	url = git@github.com:pytorch-tpu/fairseq.git
