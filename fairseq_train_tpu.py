@@ -226,7 +226,7 @@ def main_tpu(args):
     stats = None
     tracker = xm.RateTracker()
     for i, samples in loader:
-      if not (i % args.log_steps):
+      if i and not (i % args.log_steps):
         print(
             log_step(
                 'training',
