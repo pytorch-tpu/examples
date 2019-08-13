@@ -217,7 +217,8 @@ def main_tpu(args):
   def log_step(step_type, device, step, tracker=None, metrics_debug=False):
     msg = '{}/ {}, device {}, step {}'.format(step_type, now(), device, step)
     if tracker:
-      msg += ', Rate={:.2f}'.format(tracker.rate())
+      rates = tracker.rate(), tracker.global_rate()
+      msg += ', Rate={:.2f}, Global Rate={:.2f}'.format(*rates)
     return msg
 
   def train_loop_fn(model, loader, device, context):
@@ -225,7 +226,7 @@ def main_tpu(args):
     stats = None
     tracker = xm.RateTracker()
     for i, samples in loader:
-      if not (i % args.log_steps):
+      if i and not (i % args.log_steps):
         print(
             log_step(
                 'training',
@@ -348,7 +349,8 @@ def main_tpu(args):
       progress.print(stats, tag=device)
     print('Epoch {} Tracker Rates:'.format(epoch_itr.epoch))
     for tracker in trackers:
-      print('\tRate={:.2f}'.format(tracker.rate()))
+      rates = tracker.rate(), tracker.global_rate()
+      print('\tRate={:.2f}, Global Rate={:.2f}'.format(*rates))
     print('Epoch {} end {}'.format(epoch_itr.epoch, now()))
     if args.metrics_debug:
       print(torch_xla._XLAC._xla_metrics_report())
