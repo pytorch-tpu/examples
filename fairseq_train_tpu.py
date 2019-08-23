@@ -6,47 +6,6 @@ This file mimics pytorch/fairseq/train.py, but contains some changes that work
 
 ```bash
 export XRT_TPU_CONFIG="tpu_worker;0;$TPU_IP_ADDRESS:8470"
-python fairseq_train_tpu.py \
-  $path_data \
-  --arch=transformer_vaswani_wmt_en_de_big \
-  --max-sentences=$batch_size \
-  --max-sentences-valid=$batch_size \
-  --max-source-positions=128 \
-  --max-target-positions=128 \
-  --required-batch-size-multiple=$batch_size \
-  --max-tokens=4096 \
-  --no-save \
-  --attention-dropout=0.1 \
-  --no-progress-bar \
-  --criterion=label_smoothed_cross_entropy \
-  --log-interval=100 \
-  --source-lang=en \
-  --lr-scheduler=inverse_sqrt \
-  --min-lr 1e-09 \
-  --skip-invalid-size-inputs-valid-test \
-  --target-lang=de \
-  --label-smoothing=0.1 \
-  --update-freq=1 \
-  --optimizer adam \
-  --warmup-init-lr 1e-07 \
-  --lr 0.0005 \
-  --warmup-updates 4000 \
-  --share-all-embeddings \
-  --dropout 0.3 \
-  --weight-decay 0.0 \
-  --valid-subset=valid \
-  --max-epoch=5 \
-    --num_cores=8 \
-    --metrics_debug \
-    --pad_to_length=128 \
-    --log_steps=100
-```
-
-Here, TPU specific flags are
-    --num_cores
-    --metrics_debug
-    --pad_to_length
-    --log_steps
 
 """
 
@@ -71,7 +30,28 @@ from fairseq.data import data_utils
 # Overwriting collate_tokens to guarantee constant size input tensors
 # This is reducing the number of graph recompiles
 collate_tokens_gpu = data_utils.collate_tokens
+batch_by_size_gpu = data_utils.batch_by_size
 import train as fairseq_train
+
+
+def batch_by_size_tpu(
+    indices,
+    num_tokens_fn,
+    max_tokens=None,
+    max_sentences=None,
+    required_batch_size_multiple=1,
+):
+  batches = [[] for _ in INPUT_SHAPES]
+  for idx in indices:
+    sample_len = num_tokens_fn(idx)
+    for j, (batch_size, padlen) in enumerate(INPUT_SHAPES):
+      if padlen < sample_len:
+        continue
+      batches[j].append(idx)
+      if len(batches[j]) == batch_size:
+        yield batches[j]
+        batches[j] = []
+      break
 
 
 def collate_tokens_tpu(values,
@@ -79,18 +59,10 @@ def collate_tokens_tpu(values,
                        eos_idx=None,
                        left_pad=False,
                        move_eos_to_beginning=False):
-  # Copied over from fairseq.data_utils, and modified so that num_columns
-  # in the output tensor is not too variable.
-
-  # correcting columns
-  global PAD_TO_LENGTH
-  size = max(v.size(0) for v in values)
-  if size > PAD_TO_LENGTH:
-    xu.eprint(
-        'I had to change PAD_TO_LENGTH from {} to {}, this is going to trigger graph recompiles'
-        .format(PAD_TO_LENGTH, size))
-    PAD_TO_LENGTH = size
-  size = PAD_TO_LENGTH
+  for batch_size, padlen in FLAGS.input_shapes:
+    if batch_size == len(values):
+      size = padlen
+      break
   # done correcting
   res = values[0].new(len(values), size).fill_(pad_idx)
 
@@ -109,6 +81,7 @@ def collate_tokens_tpu(values,
 
 
 data_utils.collate_tokens = collate_tokens_tpu
+data_utils.batch_by_size = batch_by_size_tpu
 
 from fairseq import options, tasks, checkpoint_utils, progress_bar, utils
 from fairseq.trainer import Trainer
@@ -119,11 +92,20 @@ from fairseq.meters import StopwatchMeter, AverageMeter
 def parse_args():
   # We need to control certain flags here.
   # e.g. parallelization needs to be suppressed and deferred to torch_xla flags
-  # e.g. input tensor shapes need to be controlled via
-  #   max_sentences, required_batch_size_multiple
+  # e.g. input tensor shapes need to be controlled via --input_shapes
   parser = options.get_training_parser()
-  parser.add_argument('--num_cores', type=int, default=8)
-  parser.add_argument('--pad_to_length', type=int, default=64)
+  parser.add_argument(
+      '--input_shapes',
+      default=None,
+      help=(
+          'This is used to specify batches and pad lengths. Ex: '
+          '--input_shapes=256x32,512x16 will produce batches w/ 256 sentences '
+          'padded to length 32, or 512 sentences padded to length 16. '
+          'Including too many input shapes will cause graph recompiles and '
+          'degrade performance. On the other extreme, including 1 shape may '
+          'waste a ton of flops, since batches may contain a lot of pad '
+          'indices on average. Note that the max pad length in this arg will '
+          'be used as `max_sentences` and `max_sentences_valid`.'))
   parser.add_argument('--log_steps', type=int, default=20)
   parser.add_argument('--use_gpu', action='store_true')
   parser.add_argument('--metrics_debug', action='store_true')
@@ -138,24 +120,34 @@ def parse_args():
     if FLAGS.distributed_init_method is not None:
       xu.eprint('suppressing "distributed_init_method"')
       FLAGS.distributed_init_method = None
-    if FLAGS.max_sentences != FLAGS.required_batch_size_multiple:
-      batch_size = max(
-          filter(lambda r: r is not None,
-                 [FLAGS.max_sentences, FLAGS.required_batch_size_multiple]))
-      xu.eprint(
-          '"max_sentences" and "required_batch_size_multiple" must be equal'
-          ' to have good performance on TPUs. Using {}'.format(batch_size))
-      FLAGS.max_sentences = batch_size
-      FLAGS.required_batch_size_multiple = batch_size
-    if FLAGS.max_sentences_valid is not None and FLAGS.max_sentences_valid != FLAGS.max_sentences:
-      FLAGS.max_sentences_valid = FLAGS.max_sentences
-      xu.eprint('"max_sentences_valid" and "max_sentences" must be equal'
-                ' to have good performance on TPUs. Using {}'.format(
-                    FLAGS.max_sentences))
-    if FLAGS.max_tokens is not None:
-      xu.eprint('"max_tokens" needs to be None for better TPU performance')
-      FLAGS.max_tokens = None
+    if FLAGS.input_shapes is None:
+      raise RuntimeError('Please specify batches and pad lengths using '
+                         '--input_shapes. Ex: --input_shapes=256x32,512x16 .'
+                         'Please refer to the description of the --input_shape'
+                         ' arg in --help')
+    gpu_input_shape_args = [
+        'max_sentences', 'required_batch_size_multiple', 'max_sentences_valid',
+        'max_tokens'
+    ]
+    nonnull_gpu_input_shape_args = [
+        arg for arg in gpu_input_shape_args if getattr(FLAGS, arg) is not None
+    ]
+    if nonnull_gpu_input_shape_args:
+      errmsg = ('On TPUs, please control input shapes '
+                'using `--input_shapes`. Any non-null arg in {} will trigger'
+                ' this error.').format(nonnull_gpu_input_shape_args,
+                                       gpu_input_shape_args)
+      raise RuntimeError(errmsg)
+
+  FLAGS.input_shapes = parse_input_shapes(FLAGS)
   return FLAGS
+
+
+def parse_input_shapes(FLAGS):
+  input_shapes = map(lambda shape: shape.split('x'),
+                     FLAGS.input_shapes.replace('*', 'x').split(','))
+  input_shapes = [list(map(int, input_shape)) for input_shape in input_shapes]
+  return input_shape
 
 
 def prepare_task(args, devices):
@@ -199,7 +191,7 @@ def prepare_task(args, devices):
 
 def main_tpu(args):
 
-  def log_step(step_type, device, step, tracker=None, metrics_debug=False):
+  def log_step(step_type, device, step, tracker=None):
     msg = '{}/ {}, device {}, step {}'.format(step_type, utils.now(), device,
                                               step)
     if tracker:
@@ -213,13 +205,7 @@ def main_tpu(args):
     tracker = xm.RateTracker()
     for i, samples in loader:
       if i and not (i % args.log_steps):
-        print(
-            log_step(
-                'training',
-                device,
-                i,
-                tracker=tracker,
-                metrics_debug=args.metrics_debug))
+        print(log_step('training', device, i, tracker=tracker))
       _log_output = trainer.train_step(samples)
       xm.optimizer_step(trainer.optimizer)
       tracker.add(len(samples) * args.max_sentences)  # n_batches * batch_size
@@ -364,11 +350,11 @@ def main_tpu(args):
 
 
 if __name__ == '__main__':
-  # override certain args so that we use XLA parallelism instead of torch.
   FLAGS = parse_args()
   if FLAGS.use_gpu:
+    # undo batch preparation function assignments TPU -> GPU
     data_utils.collate_tokens = collate_tokens_gpu
+    data_utils.batch_by_size = batch_by_size_gpu
     fairseq_train.cli_main()
   else:
-    PAD_TO_LENGTH = FLAGS.pad_to_length
     main_tpu(FLAGS)
