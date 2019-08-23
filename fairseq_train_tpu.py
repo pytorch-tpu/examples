@@ -43,7 +43,7 @@ def batch_by_size_tpu(
   batches = [[] for _ in FLAGS.input_shapes]
   for idx in indices:
     sample_len = num_tokens_fn(idx)
-    for j, (batch_size, padlen) in enumerate(INPUT_SHAPES):
+    for j, (batch_size, padlen) in enumerate(FLAGS.input_shapes):
       if padlen < sample_len:
         continue
       batches[j].append(idx)
@@ -104,7 +104,7 @@ def parse_args():
           'degrade performance. On the other extreme, including 1 shape may '
           'waste a ton of flops, since batches may contain a lot of pad '
           'indices on average. Note that the max pad length in this arg will '
-          'be used as `max_sentences` and `max_sentences_valid`.'))
+          'be used as `--max-source-positions`'))
   parser.add_argument('--log_steps', type=int, default=20)
   parser.add_argument('--num_cores', type=int, default=8)
   parser.add_argument('--use_gpu', action='store_true')
@@ -138,6 +138,9 @@ def parse_args():
       raise RuntimeError(errmsg)
 
   FLAGS.input_shapes = parse_input_shapes(FLAGS)
+  # XXX: do we ever have more than 2 dimensions in fairseq?
+  FLAGS.max_source_positions = FLAGS.input_shapes[-1][1]
+  # XXX: what about `max_target_positions`?
   return FLAGS
 
 
@@ -147,6 +150,7 @@ def parse_input_shapes(FLAGS):
       for shape in FLAGS.input_shapes.replace('*', 'x').split(',')
       if shape)
   input_shapes = [list(map(int, input_shape)) for input_shape in input_shapes]
+  input_shapes.sort(key=lambda (bs, padlen): padlen)
   return input_shapes
 
 
