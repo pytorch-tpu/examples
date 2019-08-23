@@ -14,10 +14,9 @@ import sys
 import os
 import math
 import collections
-from datetime import datetime
-import utils
+import utils as utils_tpu
 
-utils.initialize_path('fairseq')
+utils_tpu.initialize_path('fairseq')
 
 import torch
 
@@ -41,7 +40,7 @@ def batch_by_size_tpu(
     max_sentences=None,
     required_batch_size_multiple=1,
 ):
-  batches = [[] for _ in INPUT_SHAPES]
+  batches = [[] for _ in FLAGS.input_shapes]
   for idx in indices:
     sample_len = num_tokens_fn(idx)
     for j, (batch_size, padlen) in enumerate(INPUT_SHAPES):
@@ -148,7 +147,7 @@ def parse_input_shapes(FLAGS):
       for shape in FLAGS.input_shapes.replace('*', 'x').split(',')
       if shape)
   input_shapes = [list(map(int, input_shape)) for input_shape in input_shapes]
-  return input_shape
+  return input_shapes
 
 
 def prepare_task(args, devices):
@@ -193,7 +192,7 @@ def prepare_task(args, devices):
 def main_tpu(args):
 
   def log_step(step_type, device, step, tracker=None):
-    msg = '{}/ {}, device {}, step {}'.format(step_type, utils.now(), device,
+    msg = '{}/ {}, device {}, step {}'.format(step_type, utils_tpu.now(), device,
                                               step)
     if tracker:
       rates = tracker.rate(), tracker.global_rate()
@@ -263,7 +262,7 @@ def main_tpu(args):
         no_progress_bar='simple')
     stats_per_device = model_parallel(valid_loop_fn, progress)
     valid_losses = [stats['loss'].avg for stats in stats_per_device]
-    print('validation stats on subset "{}" - {}'.format(subset, utils.now()))
+    print('validation stats on subset "{}" - {}'.format(subset, utils_tpu.now()))
     for stats in stats_per_device:
       progress.print(stats, tag=subset, step=trainer.get_num_updates())
     return valid_losses
@@ -311,7 +310,7 @@ def main_tpu(args):
   train_meter.start()
   while keep_training(lr, epoch_itr, trainers):
     # TRAINING
-    print('Epoch {} begin {}'.format(epoch_itr.epoch + 1, utils.now()))
+    print('Epoch {} begin {}'.format(epoch_itr.epoch + 1, utils_tpu.now()))
     progress = initialize_loader_for_epoch(args, epoch_itr)
     out = model_parallel(train_loop_fn, progress)
     trackers, stats_ = zip(*out)
@@ -324,7 +323,7 @@ def main_tpu(args):
     for tracker in trackers:
       rates = tracker.rate(), tracker.global_rate()
       print('\tRate={:.2f}, Global Rate={:.2f}'.format(*rates))
-    print('Epoch {} end {}'.format(epoch_itr.epoch, utils.now()))
+    print('Epoch {} end {}'.format(epoch_itr.epoch, utils_tpu.now()))
     if args.metrics_debug:
       print(torch_xla._XLAC._xla_metrics_report())
 
