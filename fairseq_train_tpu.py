@@ -213,7 +213,7 @@ def main_tpu(args):
         print(log_step('training', device, i, tracker=tracker))
       _log_output = trainer.train_step(samples)
       xm.optimizer_step(trainer.optimizer)
-      tracker.add(len(samples) * args.max_sentences)  # n_batches * batch_size
+      tracker.add(sum(sample['nsentences'] for sample in samples))
     stats = fairseq_train.get_training_stats(trainer)
     return tracker, stats
 
