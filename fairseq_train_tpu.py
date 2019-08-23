@@ -58,11 +58,12 @@ def collate_tokens_tpu(values,
                        eos_idx=None,
                        left_pad=False,
                        move_eos_to_beginning=False):
+  size = max(v.size(0) for v in values)
   for batch_size, padlen in FLAGS.input_shapes:
-    if batch_size == len(values):
-      size = padlen
-      break
-  # done correcting
+    if padlen < size:
+      continue
+    size = padlen
+    break
   res = values[0].new(len(values), size).fill_(pad_idx)
 
   def copy_tensor(src, dst):
@@ -138,9 +139,9 @@ def parse_args():
       raise RuntimeError(errmsg)
 
   FLAGS.input_shapes = parse_input_shapes(FLAGS)
-  # XXX: do we ever have more than 2 dimensions in fairseq?
+  # XXX (taylanbil): do we ever have more than 2 dimensions in fairseq?
   FLAGS.max_source_positions = FLAGS.input_shapes[-1][1]
-  # XXX: what about `max_target_positions`?
+  # XXX (taylanbil): what about `max_target_positions`?
   return FLAGS
 
 
@@ -150,7 +151,7 @@ def parse_input_shapes(FLAGS):
       for shape in FLAGS.input_shapes.replace('*', 'x').split(',')
       if shape)
   input_shapes = [list(map(int, input_shape)) for input_shape in input_shapes]
-  input_shapes.sort(key=lambda (bs, padlen): padlen)
+  input_shapes.sort(key=lambda shape: shape[1])
   return input_shapes
 
 
