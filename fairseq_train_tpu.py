@@ -107,6 +107,7 @@ def parse_args():
           'indices on average. Note that the max pad length in this arg will '
           'be used as `max_sentences` and `max_sentences_valid`.'))
   parser.add_argument('--log_steps', type=int, default=20)
+  parser.add_argument('--num_cores', type=int, default=8)
   parser.add_argument('--use_gpu', action='store_true')
   parser.add_argument('--metrics_debug', action='store_true')
   FLAGS = options.parse_args_and_arch(parser)
@@ -126,8 +127,7 @@ def parse_args():
                          'Please refer to the description of the --input_shape'
                          ' arg in --help')
     gpu_input_shape_args = [
-        'max_sentences', 'required_batch_size_multiple', 'max_sentences_valid',
-        'max_tokens'
+        'max_sentences', 'max_sentences_valid', 'max_tokens'
     ]
     nonnull_gpu_input_shape_args = [
         arg for arg in gpu_input_shape_args if getattr(FLAGS, arg) is not None
@@ -135,8 +135,7 @@ def parse_args():
     if nonnull_gpu_input_shape_args:
       errmsg = ('On TPUs, please control input shapes '
                 'using `--input_shapes`. Any non-null arg in {} will trigger'
-                ' this error.').format(nonnull_gpu_input_shape_args,
-                                       gpu_input_shape_args)
+                ' this error.').format(gpu_input_shape_args)
       raise RuntimeError(errmsg)
 
   FLAGS.input_shapes = parse_input_shapes(FLAGS)
@@ -144,8 +143,10 @@ def parse_args():
 
 
 def parse_input_shapes(FLAGS):
-  input_shapes = map(lambda shape: shape.split('x'),
-                     FLAGS.input_shapes.replace('*', 'x').split(','))
+  input_shapes = (
+      shape.split('x')
+      for shape in FLAGS.input_shapes.replace('*', 'x').split(',')
+      if shape)
   input_shapes = [list(map(int, input_shape)) for input_shape in input_shapes]
   return input_shape
 
