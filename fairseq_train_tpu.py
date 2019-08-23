@@ -56,9 +56,9 @@ import os
 import math
 import collections
 from datetime import datetime
-from utils import initialize_path
+import utils
 
-initialize_path('fairseq')
+utils.initialize_path('fairseq')
 
 import torch
 
@@ -129,20 +129,9 @@ def parse_args():
   parser.add_argument('--metrics_debug', action='store_true')
   FLAGS = options.parse_args_and_arch(parser)
   if not FLAGS.use_gpu:
-    if FLAGS.update_freq != [1]:
-      FLAGS.update_freq = [1]
-      xu.eprint(('overriding update_freq. It is now globally 1.'
-                 ' Gradient update delaying is achieved through'
-                 ' `num_cores` in TPU setting.'))
     if FLAGS.fp16:
-      xu.eprint(
-          'suppressing "fp16" as this is controlled by env var XLA_USE_BF16')
-      FLAGS.fp16 = False
-    if FLAGS.clip_norm == 0.0:
-      xu.eprint(
-          'clip_norm needs to be nonzero for good TPU performance, setting it to 25'
-      )
-      FLAGS.clip_norm = 25.0
+      raise RuntimeError(
+          '--fp16 was provided, this is controlled by env var XLA_USE_BF16')
     if FLAGS.distributed_world_size > 1:
       xu.eprint('suppressing "distributed_world_size"')
       FLAGS.distributed_world_size = 1
@@ -208,14 +197,11 @@ def prepare_task(args, devices):
   return task, trainers, model_parallel, epoch_itr, lr, valid_subsets
 
 
-def now():
-  return datetime.now().strftime('%H:%M:%S')
-
-
 def main_tpu(args):
 
   def log_step(step_type, device, step, tracker=None, metrics_debug=False):
-    msg = '{}/ {}, device {}, step {}'.format(step_type, now(), device, step)
+    msg = '{}/ {}, device {}, step {}'.format(step_type, utils.now(), device,
+                                              step)
     if tracker:
       rates = tracker.rate(), tracker.global_rate()
       msg += ', Rate={:.2f}, Global Rate={:.2f}'.format(*rates)
@@ -290,7 +276,7 @@ def main_tpu(args):
         no_progress_bar='simple')
     stats_per_device = model_parallel(valid_loop_fn, progress)
     valid_losses = [stats['loss'].avg for stats in stats_per_device]
-    print('validation stats on subset "{}" - {}'.format(subset, now()))
+    print('validation stats on subset "{}" - {}'.format(subset, utils.now()))
     for stats in stats_per_device:
       progress.print(stats, tag=subset, step=trainer.get_num_updates())
     return valid_losses
@@ -338,7 +324,7 @@ def main_tpu(args):
   train_meter.start()
   while keep_training(lr, epoch_itr, trainers):
     # TRAINING
-    print('Epoch {} begin {}'.format(epoch_itr.epoch + 1, now()))
+    print('Epoch {} begin {}'.format(epoch_itr.epoch + 1, utils.now()))
     progress = initialize_loader_for_epoch(args, epoch_itr)
     out = model_parallel(train_loop_fn, progress)
     trackers, stats_ = zip(*out)
@@ -351,7 +337,7 @@ def main_tpu(args):
     for tracker in trackers:
       rates = tracker.rate(), tracker.global_rate()
       print('\tRate={:.2f}, Global Rate={:.2f}'.format(*rates))
-    print('Epoch {} end {}'.format(epoch_itr.epoch, now()))
+    print('Epoch {} end {}'.format(epoch_itr.epoch, utils.now()))
     if args.metrics_debug:
       print(torch_xla._XLAC._xla_metrics_report())
 
