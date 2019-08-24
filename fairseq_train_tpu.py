@@ -7,6 +7,44 @@ This file mimics pytorch/fairseq/train.py, but contains some changes that work
 ```bash
 export XRT_TPU_CONFIG="tpu_worker;0;$TPU_IP_ADDRESS:8470"
 
+python fairseq_train_tpu.py \
+  $data_path \
+  --arch=transformer_vaswani_wmt_en_de_big \
+  --max-target-positions=64 \
+  --no-save \
+  --attention-dropout=0.1 \
+  --no-progress-bar \
+  --criterion=label_smoothed_cross_entropy \
+  --source-lang=en \
+  --lr-scheduler=inverse_sqrt \
+  --min-lr 1e-09 \
+  --skip-invalid-size-inputs-valid-test \
+  --target-lang=de \
+  --label-smoothing=0.1 \
+  --update-freq=1 \
+  --optimizer adam \
+  --adam-betas '(0.9, 0.98)' \
+  --warmup-init-lr 1e-07 \
+  --lr 0.0005 \
+  --warmup-updates 4000 \
+  --share-all-embeddings \
+  --dropout 0.3 \
+  --weight-decay 0.0 \
+  --valid-subset=valid \
+  --max-epoch=50 \
+    --input_shapes=512x16,256x32,128x64 \
+    --num_cores=8 \
+    --metrics_debug \
+    --log_steps=100
+```
+
+Here, TPU specific flags are:
+
+    --input_shapes=512x16,256x32,128x64 \
+    --num_cores=8 \
+    --metrics_debug \
+    --log_steps=100
+
 """
 
 import argparse
@@ -141,7 +179,6 @@ def parse_args():
   FLAGS.input_shapes = parse_input_shapes(FLAGS)
   # XXX (taylanbil): do we ever have more than 2 dimensions in fairseq?
   FLAGS.max_source_positions = FLAGS.input_shapes[-1][1]
-  # XXX (taylanbil): what about `max_target_positions`?
   return FLAGS
 
 
