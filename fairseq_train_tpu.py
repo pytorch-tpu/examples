@@ -78,10 +78,10 @@ def batch_by_size_tpu(
     max_sentences=None,
     required_batch_size_multiple=1,
 ):
-  batches = [[] for _ in FLAGS.input_shapes]
+  batches = [[] for _ in INPUT_SHAPES]
   for idx in indices:
     sample_len = num_tokens_fn(idx)
-    for j, (batch_size, padlen) in enumerate(FLAGS.input_shapes):
+    for j, (batch_size, padlen) in enumerate(INPUT_SHAPES):
       if padlen < sample_len:
         continue
       batches[j].append(idx)
@@ -97,7 +97,7 @@ def collate_tokens_tpu(values,
                        left_pad=False,
                        move_eos_to_beginning=False):
   size = max(v.size(0) for v in values)
-  for batch_size, padlen in FLAGS.input_shapes:
+  for batch_size, padlen in INPUT_SHAPES:
     if padlen < size:
       continue
     size = padlen
@@ -131,6 +131,7 @@ def parse_args():
   # We need to control certain flags here.
   # e.g. parallelization needs to be suppressed and deferred to torch_xla flags
   # e.g. input tensor shapes need to be controlled via --input_shapes
+  global INPUT_SHAPES
   parser = options.get_training_parser()
   parser.add_argument(
       '--input_shapes',
@@ -176,16 +177,16 @@ def parse_args():
                 ' this error.').format(gpu_input_shape_args)
       raise RuntimeError(errmsg)
 
-  FLAGS.input_shapes = parse_input_shapes(FLAGS)
+  INPUT_SHAPES = parse_input_shapes(FLAGS)
   # XXX (taylanbil): do we ever have more than 2 dimensions in fairseq?
-  FLAGS.max_source_positions = FLAGS.input_shapes[-1][1]
+  FLAGS.max_source_positions = INPUT_SHAPES[-1][1]
   return FLAGS
 
 
-def parse_input_shapes(FLAGS):
+def parse_input_shapes(input_shapes_arg):
   input_shapes = (
       shape.split('x')
-      for shape in FLAGS.input_shapes.replace('*', 'x').split(',')
+      for shape in input_shapes_arg.replace('*', 'x').split(',')
       if shape)
   input_shapes = [list(map(int, input_shape)) for input_shape in input_shapes]
   input_shapes.sort(key=lambda shape: shape[1])
@@ -399,4 +400,5 @@ if __name__ == '__main__':
     data_utils.batch_by_size = batch_by_size_gpu
     fairseq_train.cli_main()
   else:
+    INPUT_SHAPES = None
     main_tpu(FLAGS)
