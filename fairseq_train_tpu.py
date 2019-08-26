@@ -393,6 +393,7 @@ def main_tpu(args):
 
 
 if __name__ == '__main__':
+  INPUT_SHAPES = None
   FLAGS = parse_args()
   if FLAGS.use_gpu:
     # undo batch preparation function assignments TPU -> GPU
@@ -400,5 +401,4 @@ if __name__ == '__main__':
     data_utils.batch_by_size = batch_by_size_gpu
     fairseq_train.cli_main()
   else:
-    INPUT_SHAPES = None
     main_tpu(FLAGS)
