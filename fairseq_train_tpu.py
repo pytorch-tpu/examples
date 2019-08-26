@@ -235,8 +235,8 @@ def prepare_task(args, devices):
 def main_tpu(args):
 
   def log_step(step_type, device, step, tracker=None):
-    msg = '{}/ {}, device {}, step {}'.format(step_type, utils_tpu.now(), device,
-                                              step)
+    msg = '{}/ {}, device {}, step {}'.format(step_type, utils_tpu.now(),
+                                              device, step)
     if tracker:
       rates = tracker.rate(), tracker.global_rate()
       msg += ', Rate={:.2f}, Global Rate={:.2f}'.format(*rates)
@@ -265,13 +265,7 @@ def main_tpu(args):
     extra_meters = collections.defaultdict(lambda: AverageMeter())
     for i, sample in loader:
       if not (i % args.log_steps):
-        print(
-            log_step(
-                'validation',
-                device,
-                i,
-                tracker=None,
-                metrics_debug=args.metrics_debug))
+        print(log_step('validation', device, i, tracker=None))
       log_output = trainer.valid_step(sample)
       for k, v in log_output.items():
         if k in ['loss', 'nll_loss', 'ntokens', 'nsentences', 'sample_size']:
@@ -305,7 +299,8 @@ def main_tpu(args):
         no_progress_bar='simple')
     stats_per_device = model_parallel(valid_loop_fn, progress)
     valid_losses = [stats['loss'].avg for stats in stats_per_device]
-    print('validation stats on subset "{}" - {}'.format(subset, utils_tpu.now()))
+    print('validation stats on subset "{}" - {}'.format(subset,
+                                                        utils_tpu.now()))
     for stats in stats_per_device:
       progress.print(stats, tag=subset, step=trainer.get_num_updates())
     return valid_losses
