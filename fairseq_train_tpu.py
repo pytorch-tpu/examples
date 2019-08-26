@@ -177,9 +177,9 @@ def parse_args():
                 ' this error.').format(gpu_input_shape_args)
       raise RuntimeError(errmsg)
 
-  INPUT_SHAPES = parse_input_shapes(FLAGS.input_shapes)
-  # XXX (taylanbil): do we ever have more than 2 dimensions in fairseq?
-  FLAGS.max_source_positions = INPUT_SHAPES[-1][1]
+    INPUT_SHAPES = parse_input_shapes(FLAGS.input_shapes)
+    # XXX (taylanbil): do we ever have more than 2 dimensions in fairseq?
+    FLAGS.max_source_positions = INPUT_SHAPES[-1][1]
   return FLAGS
 
 
