@@ -246,7 +246,7 @@ def main_tpu(args):
 
   def train_loop_fn(model, loader, device, context):
     trainer = trainers[str(device)]
-    stats = None
+    stats, log_output = None, None
     tracker = xm.RateTracker()
     for i, samples in loader:
       if i and not (i % args.log_steps):
