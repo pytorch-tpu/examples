@@ -5,6 +5,7 @@ Utility functions shared by different runners in this repo
 
 import os
 import sys
+from datetime import datetime
 
 
 def initialize_path(*deps):
