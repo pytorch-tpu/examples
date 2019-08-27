@@ -139,7 +139,7 @@ def parse_args():
       default=None,
       help=(
           'This is used to specify batches and pad lengths. Ex: '
-          '`--input_shapes 256x32 512x16` will produce batches w/ 256 
+          '`--input_shapes 256x32 512x16` will produce batches w/ 256 '
           'sentences padded to length 32, or 512 sentences padded to length '
           '16. Including too many input shapes will cause graph recompiles and'
           ' degrade performance. On the other extreme, including 1 shape may '
