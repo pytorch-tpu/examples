@@ -32,7 +32,7 @@ python fairseq_train_tpu.py \
   --weight-decay 0.0 \
   --valid-subset=valid \
   --max-epoch=50 \
-    --input_shapes=512x16,256x32,128x64 \
+    --input_shapes 512x16 256x32 128x64 \
     --num_cores=8 \
     --metrics_debug \
     --log_steps=100
@@ -40,7 +40,7 @@ python fairseq_train_tpu.py \
 
 Here, TPU specific flags are:
 
-    --input_shapes=512x16,256x32,128x64 \
+    --input_shapes 512x16 256x32 128x64 \
     --num_cores=8 \
     --metrics_debug \
     --log_steps=100
@@ -135,13 +135,14 @@ def parse_args():
   parser = options.get_training_parser()
   parser.add_argument(
       '--input_shapes',
+      nargs='*',
       default=None,
       help=(
           'This is used to specify batches and pad lengths. Ex: '
-          '--input_shapes=256x32,512x16 will produce batches w/ 256 sentences '
-          'padded to length 32, or 512 sentences padded to length 16. '
-          'Including too many input shapes will cause graph recompiles and '
-          'degrade performance. On the other extreme, including 1 shape may '
+          '`--input_shapes 256x32 512x16` will produce batches w/ 256 
+          'sentences padded to length 32, or 512 sentences padded to length '
+          '16. Including too many input shapes will cause graph recompiles and'
+          ' degrade performance. On the other extreme, including 1 shape may '
           'waste a ton of flops, since batches may contain a lot of pad '
           'indices on average. Note that the max pad length in this arg will '
           'be used as `--max-source-positions`'))
@@ -162,7 +163,7 @@ def parse_args():
       FLAGS.distributed_init_method = None
     if FLAGS.input_shapes is None:
       raise RuntimeError('Please specify batches and pad lengths using '
-                         '--input_shapes. Ex: --input_shapes=256x32,512x16 .'
+                         '--input_shapes. Ex: `--input_shapes 256x32 512x16` .'
                          'Please refer to the description of the --input_shape'
                          ' arg in --help')
     gpu_input_shape_args = [
@@ -185,10 +186,9 @@ def parse_args():
 
 def parse_input_shapes(input_shapes_arg):
   input_shapes = (
-      shape.split('x')
-      for shape in input_shapes_arg.replace('*', 'x').split(',')
-      if shape)
-  input_shapes = [list(map(int, input_shape)) for input_shape in input_shapes]
+      shape.replace('*', 'x').split('x')
+      for shape in input_shapes_arg)
+  input_shapes = [list(map(int, shape)) for shape in input_shapes]
   input_shapes.sort(key=lambda shape: shape[1])
   return input_shapes
 
