@@ -186,8 +186,7 @@ def parse_args():
 
 def parse_input_shapes(input_shapes_arg):
   input_shapes = (
-      shape.replace('*', 'x').split('x')
-      for shape in input_shapes_arg)
+      shape.replace('*', 'x').split('x') for shape in input_shapes_arg)
   input_shapes = [list(map(int, shape)) for shape in input_shapes]
   input_shapes.sort(key=lambda shape: shape[1])
   return input_shapes
@@ -234,22 +233,27 @@ def prepare_task(args, devices):
 
 def main_tpu(args):
 
-  def log_step(step_type, device, step, tracker=None):
+  def log_step(step_type, device, step, log_output=None, tracker=None):
     msg = '{}/ {}, device {}, step {}'.format(step_type, utils_tpu.now(),
                                               device, step)
     if tracker:
       rates = tracker.rate(), tracker.global_rate()
       msg += ', Rate={:.2f}, Global Rate={:.2f}'.format(*rates)
+    if log_output:
+      msg += 'loss={:.4f}, nll_loss={:.4f}'.format(
+          log_output['loss'].item(), log_output['nll_loss'].item())
     return msg
 
   def train_loop_fn(model, loader, device, context):
     trainer = trainers[str(device)]
-    stats = None
+    stats, log_output = None, None
     tracker = xm.RateTracker()
     for i, samples in loader:
       if i and not (i % args.log_steps):
-        print(log_step('training', device, i, tracker=tracker))
-      _log_output = trainer.train_step(samples)
+        print(
+            log_step(
+                'training', device, i, log_output=log_output, tracker=tracker))
+      log_output = trainer.train_step(samples)
       xm.optimizer_step(trainer.optimizer)
       tracker.add(sum(sample['nsentences'] for sample in samples))
     stats = fairseq_train.get_training_stats(trainer)
