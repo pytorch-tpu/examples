@@ -282,8 +282,7 @@ def main_tpu(args):
       log_output = trainer.train_step(samples)
       xm.optimizer_step(trainer.optimizer)
       tracker.add(sum(sample['nsentences'] for sample in samples))
-    stats = fairseq_train.get_training_stats(trainer)
-    return tracker, stats
+    return tracker
 
   def valid_loop_fn(model, loader, device, context):
     trainer = trainers[str(device)]
@@ -381,8 +380,7 @@ def main_tpu(args):
     # TRAINING
     print('Epoch {} begin {}'.format(epoch_itr.epoch + 1, utils_tpu.now()))
     progress = initialize_loader_for_epoch(args, epoch_itr)
-    out = model_parallel(train_loop_fn, progress)
-    trackers, stats_ = zip(*out)
+    trackers = model_parallel(train_loop_fn, progress)
     print('Epoch {} Training stats:'.format(epoch_itr.epoch))
     for device, trainer in trainers.items():
       stats = fairseq_train.get_training_stats(trainer)
