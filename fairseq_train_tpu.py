@@ -192,7 +192,7 @@ def parse_input_shapes(input_shapes_arg):
   return input_shapes
 
 
-def load_checkpoint_tpu(args, trainers):
+def load_checkpoint_tpu(args, trainers, device_preloaded):
 
   def meter_to_device(meter, device):
     # This is AverageMeter's only at the moment.
@@ -205,13 +205,14 @@ def load_checkpoint_tpu(args, trainers):
       meter_to_device(trainer.meters[meterkey], device)
 
   for device, trainer in trainers.items():
-    _ = trainer.load_checkpoint(
-        checkpoint_utils.get_checkpoint_path(args),
-        reset_optimizer=args.reset_optimizer,
-        reset_lr_scheduler=args.reset_lr_scheduler,
-        optimizer_overrides=eval(args.optimizer_overrides),
-        reset_meters=args.reset_meters,
-    )
+    if device != device_preloaded:
+      _ = trainer.load_checkpoint(
+          checkpoint_utils.get_checkpoint_path(args),
+          reset_optimizer=args.reset_optimizer,
+          reset_lr_scheduler=args.reset_lr_scheduler,
+          optimizer_overrides=eval(args.optimizer_overrides),
+          reset_meters=args.reset_meters,
+      )
     trainer_meters_to_device(trainer, device)
 
 
@@ -251,7 +252,7 @@ def prepare_task(args, devices):
     # checkpoint detected, load saved model weights to all devices
     xu.eprint(
         'checkpoint detected, device 0 meters need to be re-loaded to device')
-    load_checkpoint_tpu(args, trainers)
+    load_checkpoint_tpu(args, trainers, devices[0])
   valid_subsets = args.valid_subset.split(',')
   return task, trainers, model_parallel, epoch_itr, lr, valid_subsets
 
