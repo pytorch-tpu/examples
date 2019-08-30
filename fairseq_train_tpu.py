@@ -195,10 +195,9 @@ def parse_input_shapes(input_shapes_arg):
 def load_checkpoint_tpu(args, trainers, device_preloaded):
 
   def meter_to_device(meter, device):
-    # This is AverageMeter's only at the moment.
-    for key, val in vars(meter):
+    for key, val in vars(meter).items():
       if isinstance(val, torch.Tensor):
-        newval = getattr(meter, key).to(device=torch.device(device))
+        newval = val.to(device=torch.device(device))
         setattr(meter, key, newval)
 
   def trainer_meters_to_device(trainer, device):
