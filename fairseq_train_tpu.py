@@ -201,7 +201,7 @@ def load_checkpoint_tpu(args, trainers):
       setattr(meter, key, newval)
 
   def trainer_meters_to_device(trainer, device):
-    for meterkey in ['gnorm', 'train_loss']:
+    for meterkey in ['gnorm', 'train_loss', 'train_nll_loss']:
       meter_to_device(trainer.meters[meterkey], device)
 
   for device, trainer in trainers.items():
