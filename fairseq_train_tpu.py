@@ -193,7 +193,7 @@ def parse_input_shapes(input_shapes_arg):
 
 
 def load_checkpoint_tpu(args, trainers):
-  
+
   def meter_to_device(meter, device):
     # This is AverageMeter's only at the moment.
     for key in ['avg', 'sum', 'val']:
@@ -206,13 +206,14 @@ def load_checkpoint_tpu(args, trainers):
 
   for device, trainer in trainers.items():
     _ = trainer.load_checkpoint(
-      checkpoint_utils.get_checkpoint_path(args),
-      reset_optimizer=args.reset_optimizer,
-      reset_lr_scheduler= args.reset_lr_scheduler,
-      optimizer_overrides=eval(args.optimizer_overrides),
-      reset_meters=args.reset_meters,
+        checkpoint_utils.get_checkpoint_path(args),
+        reset_optimizer=args.reset_optimizer,
+        reset_lr_scheduler=args.reset_lr_scheduler,
+        optimizer_overrides=eval(args.optimizer_overrides),
+        reset_meters=args.reset_meters,
     )
     trainer_meters_to_device(trainer, device)
+
 
 def prepare_task(args, devices):
   # Setup task, e.g., translation, language modeling, etc.
@@ -248,7 +249,8 @@ def prepare_task(args, devices):
       args, trainers[devices[0]])
   if extra_state is not None:
     # checkpoint detected, load saved model weights to all devices
-    xu.eprint('checkpoint detected, device 0 meters need to be re-loaded to device')
+    xu.eprint(
+        'checkpoint detected, device 0 meters need to be re-loaded to device')
     load_checkpoint_tpu(args, trainers)
   valid_subsets = args.valid_subset.split(',')
   return task, trainers, model_parallel, epoch_itr, lr, valid_subsets
@@ -329,7 +331,8 @@ def main_tpu(args):
     print('validation stats on subset "{}" - {}'.format(subset,
                                                         utils_tpu.now()))
     for stats in stats_per_device:
-      progress.print(stats, tag=subset, step=trainers['xla:1'].get_num_updates())
+      progress.print(
+          stats, tag=subset, step=trainers['xla:1'].get_num_updates())
     return valid_losses
 
   def validate(args, trainers, task, epoch_itr, subsets):
@@ -405,8 +408,8 @@ def main_tpu(args):
 
       # save checkpoint
       if epoch_itr.epoch % args.save_interval == 0:
-        checkpoint_utils.save_checkpoint(
-            args, trainers[devices[0]], epoch_itr, vloss)
+        checkpoint_utils.save_checkpoint(args, trainers[devices[0]], epoch_itr,
+                                         vloss)
 
     if args.metrics_debug:
       print(torch_xla._XLAC._xla_metrics_report())
