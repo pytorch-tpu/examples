@@ -196,13 +196,14 @@ def load_checkpoint_tpu(args, trainers, device_preloaded):
 
   def meter_to_device(meter, device):
     # This is AverageMeter's only at the moment.
-    for key in ['avg', 'sum', 'val']:
-      newval = getattr(meter, key).to(device=torch.device(device))
-      setattr(meter, key, newval)
+    for key, val in vars(meter):
+      if isinstance(val, torch.Tensor):
+        newval = getattr(meter, key).to(device=torch.device(device))
+        setattr(meter, key, newval)
 
   def trainer_meters_to_device(trainer, device):
-    for meterkey in ['gnorm', 'train_loss', 'train_nll_loss']:
-      meter_to_device(trainer.meters[meterkey], device)
+    for meter in trainer.meters.values():
+      meter_to_device(meter, device)
 
   for device, trainer in trainers.items():
     if device != device_preloaded:
