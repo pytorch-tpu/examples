@@ -32,7 +32,7 @@ python fairseq_train_tpu.py \
   --weight-decay 0.0 \
   --valid-subset=valid \
   --max-epoch=50 \
-    --input_shapes 512x16 256x32 128x64 \
+    --input_shapes 1024x16 512x32 256x64 \
     --num_cores=8 \
     --metrics_debug \
     --log_steps=100
@@ -40,7 +40,7 @@ python fairseq_train_tpu.py \
 
 Here, TPU specific flags are:
 
-    --input_shapes 512x16 256x32 128x64 \
+    --input_shapes 1024x16 512x32 256x64 \
     --num_cores=8 \
     --metrics_debug \
     --log_steps=100
@@ -52,12 +52,12 @@ import sys
 import os
 import math
 import collections
+
 import utils as utils_tpu
 
 utils_tpu.initialize_path('fairseq')
 
 import torch
-
 import torch_xla
 import torch_xla_py.data_parallel as dp
 import torch_xla_py.utils as xu
@@ -192,6 +192,28 @@ def parse_input_shapes(input_shapes_arg):
   return input_shapes
 
 
+def load_checkpoint_tpu(args, trainers):
+  
+  def meter_to_device(meter, device):
+    # This is AverageMeter's only at the moment.
+    for key in ['avg', 'sum', 'val']:
+      newval = getattr(meter, key).to(device=torch.device(device))
+      setattr(meter, key, newval)
+
+  def trainer_meters_to_device(trainer, device):
+    for meterkey in ['gnorm', 'train_loss']:
+      meter_to_device(trainer.meters[meterkey], device)
+
+  for device, trainer in trainers.items():
+    _ = trainer.load_checkpoint(
+      checkpoint_utils.get_checkpoint_path(args),
+      reset_optimizer=args.reset_optimizer,
+      reset_lr_scheduler= args.reset_lr_scheduler,
+      optimizer_overrides=eval(args.optimizer_overrides),
+      reset_meters=args.reset_meters,
+    )
+    trainer_meters_to_device(trainer, device)
+
 def prepare_task(args, devices):
   # Setup task, e.g., translation, language modeling, etc.
   task = tasks.setup_task(args)
@@ -218,15 +240,16 @@ def prepare_task(args, devices):
       device: Trainer(args, task, model, task.build_criterion(args), xla=True)
       for device, model in zip(model_parallel.devices, model_parallel.models)
   }
-  trainer = trainers[devices[0]]
-  lr = trainer.get_lr()
-
-  # TODO(taylanbil): for now, this next line is only creating the iterator.
-  # validate its behavior with the case where a checkpoint actually exists.
+  lr = trainers[devices[0]].get_lr()
 
   # Load the latest checkpoint if one is available and restore the
   # corresponding train iterator
-  extra_state, epoch_itr = checkpoint_utils.load_checkpoint(args, trainer)
+  extra_state, epoch_itr = checkpoint_utils.load_checkpoint(
+      args, trainers[devices[0]])
+  if extra_state is not None:
+    # checkpoint detected, load saved model weights to all devices
+    xu.eprint('checkpoint detected, device 0 meters need to be re-loaded to device')
+    load_checkpoint_tpu(args, trainers)
   valid_subsets = args.valid_subset.split(',')
   return task, trainers, model_parallel, epoch_itr, lr, valid_subsets
 
@@ -306,7 +329,7 @@ def main_tpu(args):
     print('validation stats on subset "{}" - {}'.format(subset,
                                                         utils_tpu.now()))
     for stats in stats_per_device:
-      progress.print(stats, tag=subset, step=trainer.get_num_updates())
+      progress.print(stats, tag=subset, step=trainers['xla:1'].get_num_updates())
     return valid_losses
 
   def validate(args, trainers, task, epoch_itr, subsets):
@@ -375,14 +398,15 @@ def main_tpu(args):
 
       # only use average first validation loss from the first device
       # to update the learning rate
-      vloss = valid_losses[valid_subsets[0]][0]
+      vloss = valid_losses[valid_subsets[0]][0].item()
       print('old learning rate: {}'.format(lr))
       lr = trainers[devices[0]].lr_step(epoch_itr.epoch, vloss)
       print('new learning rate: {}'.format(lr))
 
       # save checkpoint
       if epoch_itr.epoch % args.save_interval == 0:
-        checkpoint_utils.save_checkpoint(args, trainer, epoch_itr, vloss)
+        checkpoint_utils.save_checkpoint(
+            args, trainers[devices[0]], epoch_itr, vloss)
 
     if args.metrics_debug:
       print(torch_xla._XLAC._xla_metrics_report())
