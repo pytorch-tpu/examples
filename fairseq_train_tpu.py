@@ -396,7 +396,7 @@ def main_tpu(args):
     print('Epoch {} Tracker Rates:'.format(epoch_itr.epoch))
     for tracker in trackers:
       rates = tracker.rate(), tracker.global_rate()
-      print('\tRate={:.2f}, Global Rate={:.2f}'.format(*rates))
+      print('\tRate={:.2f}, GlobalRate={:.2f}'.format(*rates))
     print('Epoch {} end {}'.format(epoch_itr.epoch, utils_tpu.now()))
     if args.metrics_debug:
       print(torch_xla._XLAC._xla_metrics_report())
