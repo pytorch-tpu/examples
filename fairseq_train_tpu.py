@@ -181,10 +181,12 @@ def parse_args():
     INPUT_SHAPES = parse_input_shapes(FLAGS.input_shapes)
     # XXX (taylanbil): do we ever have more than 2 dimensions in fairseq?
     FLAGS.max_source_positions = INPUT_SHAPES[-1][1]
-    if xu.getenv_as('XLA_USE_BF16', bool, False)):
+    if xu.getenv_as('XLA_USE_BF16', bool, False):
       xu.eprint(
-          "WARNING: bfloat16 is enabled. Note that fairseq meters such as loss will accumulate the numerator, and increment the denominator. Due to lack of precision in higher numbers in bfloat16, these meters will report invalid values after a while."
-      )
+          'WARNING: bfloat16 is enabled. Note that fairseq meters such as '
+          'loss will accumulate the numerator, and increment the denominator. '
+          'Due to lack of precision in higher numbers in bfloat16, these '
+          'meters will report invalid values after a while.')
 
   return FLAGS
 
