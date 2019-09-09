@@ -181,6 +181,13 @@ def parse_args():
     INPUT_SHAPES = parse_input_shapes(FLAGS.input_shapes)
     # XXX (taylanbil): do we ever have more than 2 dimensions in fairseq?
     FLAGS.max_source_positions = INPUT_SHAPES[-1][1]
+    if xu.getenv_as('XLA_USE_BF16', bool, False):
+      xu.eprint(
+          'WARNING: bfloat16 is enabled. Note that fairseq meters such as '
+          'loss will accumulate the numerator, and increment the denominator. '
+          'Due to lack of precision in higher numbers in bfloat16, these '
+          'meters will report invalid values after a while.')
+
   return FLAGS
 
 
@@ -264,7 +271,7 @@ def main_tpu(args):
                                               device, step)
     if tracker:
       rates = tracker.rate(), tracker.global_rate()
-      msg += ', Rate={:.2f}, Global Rate={:.2f}'.format(*rates)
+      msg += ', Rate={:.2f}, GlobalRate={:.2f}'.format(*rates)
     if log_output:
       msg += ', loss={:.4f}, nll_loss={:.4f}'.format(
           log_output['loss'].item(), log_output['nll_loss'].item())
@@ -282,8 +289,7 @@ def main_tpu(args):
       log_output = trainer.train_step(samples)
       xm.optimizer_step(trainer.optimizer)
       tracker.add(sum(sample['nsentences'] for sample in samples))
-    stats = fairseq_train.get_training_stats(trainer)
-    return tracker, stats
+    return tracker
 
   def valid_loop_fn(model, loader, device, context):
     trainer = trainers[str(device)]
@@ -354,7 +360,7 @@ def main_tpu(args):
         fix_batches_to_gpus=False, shuffle=(epoch_itr.epoch >= args.curriculum))
     itr = iterators.GroupedIterator(itr, update_freq)
     progress = progress_bar.build_progress_bar(
-        args, itr, epoch_itr.epoch, no_progress_bar='simple')
+        args, itr, epoch_itr.epoch, prefix='training', no_progress_bar='simple')
     return progress
 
   def keep_training(lr, epoch_itr, trainers):
@@ -381,8 +387,7 @@ def main_tpu(args):
     # TRAINING
     print('Epoch {} begin {}'.format(epoch_itr.epoch + 1, utils_tpu.now()))
     progress = initialize_loader_for_epoch(args, epoch_itr)
-    out = model_parallel(train_loop_fn, progress)
-    trackers, stats_ = zip(*out)
+    trackers = model_parallel(train_loop_fn, progress)
     print('Epoch {} Training stats:'.format(epoch_itr.epoch))
     for device, trainer in trainers.items():
       stats = fairseq_train.get_training_stats(trainer)
@@ -391,7 +396,7 @@ def main_tpu(args):
     print('Epoch {} Tracker Rates:'.format(epoch_itr.epoch))
     for tracker in trackers:
       rates = tracker.rate(), tracker.global_rate()
-      print('\tRate={:.2f}, Global Rate={:.2f}'.format(*rates))
+      print('\tRate={:.2f}, GlobalRate={:.2f}'.format(*rates))
     print('Epoch {} end {}'.format(epoch_itr.epoch, utils_tpu.now()))
     if args.metrics_debug:
       print(torch_xla._XLAC._xla_metrics_report())
