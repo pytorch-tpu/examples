@@ -1,5 +1,5 @@
 [submodule "deps/fairseq"]
 	path = deps/fairseq
-	url = git@github.com:pytorch-tpu/fairseq.git
+	url = ../fairseq.git
 	branch = xla
     ignore = dirty
