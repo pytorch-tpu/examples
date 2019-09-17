@@ -411,11 +411,13 @@ def main_tpu(args):
       print('old learning rate: {}'.format(lr))
       lr = trainers[devices[0]].lr_step(epoch_itr.epoch, vloss)
       print('new learning rate: {}'.format(lr))
+    else:
+      vloss = None
 
-      # save checkpoint
-      if epoch_itr.epoch % args.save_interval == 0:
-        checkpoint_utils.save_checkpoint(args, trainers[devices[0]], epoch_itr,
-                                         vloss)
+    # save checkpoint
+    if epoch_itr.epoch % args.save_interval == 0:
+      checkpoint_utils.save_checkpoint(args, trainers[devices[0]], epoch_itr,
+                                       vloss)
 
     if args.metrics_debug:
       print(torch_xla._XLAC._xla_metrics_report())
