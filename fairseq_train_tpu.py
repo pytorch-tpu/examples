@@ -197,6 +197,8 @@ def parse_input_shapes(input_shapes_arg):
   input_shapes = (
       shape.replace('*', 'x').split('x') for shape in input_shapes_arg)
   input_shapes = [list(map(int, shape)) for shape in input_shapes]
+  if len(input_shapes) == 1:
+    return input_shapes
   input_shapes.sort(key=lambda shape: shape[1])
   errmsg = (
       'Invalid --input_shapes. Batch sizes (dimension 1) need to increase as '
