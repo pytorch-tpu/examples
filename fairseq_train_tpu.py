@@ -96,12 +96,14 @@ def collate_tokens_tpu(values,
                        eos_idx=None,
                        left_pad=False,
                        move_eos_to_beginning=False):
-  size = max(v.size(0) for v in values)
   for batch_size, padlen in INPUT_SHAPES:
-    if padlen < size:
-      continue
-    size = padlen
-    break
+    if len(values) == batch_size:
+      size = padlen
+      break
+  else:
+    raise IndexError(
+        'Encountered values with an invalid length {}, input shapes were {}'
+        .format(len(values), input_shapes))
   res = values[0].new(len(values), size).fill_(pad_idx)
 
   def copy_tensor(src, dst):
