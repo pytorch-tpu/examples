@@ -203,7 +203,7 @@ def parse_input_shapes(input_shapes_arg):
       'num_tokens (dimension 2) decrease. e.g. 16x128 32x64 64x32'
   )
   assert all(
-      shape_prev[0] < shape_next[0]
+      shape_prev[0] > shape_next[0]
       for shape_prev, shape_next in zip(input_shapes, input_shapes[1:])), errmsg
 
   return input_shapes
