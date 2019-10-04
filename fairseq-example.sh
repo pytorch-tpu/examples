@@ -9,7 +9,7 @@ export XRT_TPU_CONFIG="tpu_worker;0;$TPU_IP_ADDRESS:8470"
 export XLA_USE_BF16=1  # Note: this is optional
 
 python deps/fairseq/train.py \
-  $data_path
+  $data_path \
   --save-interval=1 \
   --arch=transformer_vaswani_wmt_en_de_big \
   --max-target-positions=64 \
