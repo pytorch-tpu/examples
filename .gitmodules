@@ -1,5 +1,5 @@
 [submodule "deps/fairseq"]
 	path = deps/fairseq
 	url = ../fairseq.git
-	branch = tpu
+	branch = tpu-r0.5
     ignore = dirty
