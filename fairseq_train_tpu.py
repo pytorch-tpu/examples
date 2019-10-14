@@ -281,7 +281,7 @@ def main_tpu(args):
     trainer = trainers[str(device)]
     stats, log_output = None, None
     tracker = xm.RateTracker()
-    for i, samples in loader:
+    for i, samples in enumerate(loader):
       if i and not (i % args.log_steps):
         print(
             log_step(
@@ -299,7 +299,7 @@ def main_tpu(args):
       if meter is not None:
         meter.reset()
     extra_meters = collections.defaultdict(lambda: AverageMeter())
-    for i, sample in loader:
+    for i, sample in enumerate(loader):
       if not (i % args.log_steps):
         print(log_step('validation', device, i, tracker=None))
       log_output = trainer.valid_step(sample)
