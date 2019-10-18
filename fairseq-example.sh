@@ -37,7 +37,7 @@ python ${repo_path}/deps/fairseq/train.py \
   --valid-subset=valid \
   --train-subset=train \
   --max-epoch=25 \
-  --input_shapes 512x32 256x64 1024x16 \
+  --input_shapes 512x32 256x64 640x16 \
   --num_cores=8 \
   --metrics_debug \
   --log_steps=100
