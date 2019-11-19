@@ -1,5 +1,10 @@
 [submodule "deps/fairseq"]
-	path = deps/fairseq
-	url = ../fairseq.git
-	branch = tpu
+    path = deps/fairseq
+    url = ../fairseq.git
+    branch = tpu
+    ignore = dirty
+[submodule "deps/transformers"]
+    path = deps/transformers
+    url = ../transformers.git
+    branch = tpu
     ignore = dirty
