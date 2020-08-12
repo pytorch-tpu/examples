@@ -5,6 +5,6 @@
     ignore = dirty
 [submodule "deps/transformers"]
     path = deps/transformers
-    url = ../transformers.git
-    branch = tpu
+    url = https://github.com/huggingface/transformers.git
+    branch = master
     ignore = dirty
